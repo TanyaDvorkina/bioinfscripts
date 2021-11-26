@@ -1,5 +1,7 @@
 import networkx as nx
 
+import argparse
+
 import sys
 from pathlib import Path
 
@@ -63,71 +65,81 @@ def get_vertex(e, edges, edges_rev, used, vertex_cnt):
          out_vertex = vertex_cnt
     return in_vertex, in_len, out_vertex, out_len, vertex_cnt
 
-gfa = sys.argv[1]
-outfilename = Path(sys.argv[2])
-edges_color = {}
-if len(sys.argv) > 3:
-    color_file = Path(sys.argv[3])
-    with color_file.open() as f:
-        for ln in f.readlines():
-            e_id, color = ln.strip().split("\t")
-            if ("-" not in e_id) and ("+" not in e_id):
-                e_id = e_id + "+"
-            elif e_id.startswith("-"):
-                e_id = e_id[1:] + "-"
-            elif e_id.startswith("+"):
-                e_id = e_id[1:] + "+"
-            edges_color[e_id] = color
+def main():
+    parser = argparse.ArgumentParser(description='Converts de Bruijn GFA to dot')
+    parser.add_argument('gfa', help='gfa-file with graph')
+    parser.add_argument('outfilename', help='output dot-file name')
+    parser.add_argument('--color',  help='path to tsv-file with edge colors', required=False)
+    args = parser.parse_args()
 
-edges = {}
-edges_rev = {}
-edges_len = {}
-with open(gfa, "r") as fin:
-    for ln in fin.readlines():
-        if ln.startswith("S"):
-            _, e_id, e_str = ln.strip().split("\t")[:3]
-            edges_len[e_id + "+"] = len(e_str)
-            edges_len[e_id + "-"] = len(e_str)
-        elif ln.startswith("L"):
-            _, e1, or1, e2, or2, v_len = ln.strip().split("\t")
-            if e1 + or1 not in edges:
-                edges[e1 + or1] = []
-            if e2 + or2 not in edges_rev:
-                edges_rev[e2 + or2] = []
-            edges[e1 + or1].append([e2 + or2, v_len[:-1]])
-            edges_rev[e2 + or2].append([e1 + or1, v_len[:-1]])
+    gfa = args.gfa
+    outfilename = Path(args.outfilename)
+    edges_color = {}
+    if args.color != None:
+        color_file = Path(args.color)
+        with color_file.open() as f:
+            for ln in f.readlines():
+                e_id, color = ln.strip().split("\t")
+                if ("-" not in e_id) and ("+" not in e_id):
+                    e_id = e_id + "+"
+                elif e_id.startswith("-"):
+                    e_id = e_id[1:] + "-"
+                elif e_id.startswith("+"):
+                    e_id = e_id[1:] + "+"
+                edges_color[e_id] = color
 
-            or1 = "+" if or1 == "-" else "-"
-            or2 = "+" if or2 == "-" else "-"
-            if e2 + or2 not in edges:
-                edges[e2 + or2] = []
-            if e1 + or1 not in edges_rev:
-                edges_rev[e1 + or1] = []
-            edges[e2 + or2].append([e1 + or1, v_len[:-1]])
-            edges_rev[e1 + or1].append([e2 + or2, v_len[:-1]])
+    edges = {}
+    edges_rev = {}
+    edges_len = {}
+    with open(gfa, "r") as fin:
+        for ln in fin.readlines():
+            if ln.startswith("S"):
+                _, e_id, e_str = ln.strip().split("\t")[:3]
+                edges_len[e_id + "+"] = len(e_str)
+                edges_len[e_id + "-"] = len(e_str)
+            elif ln.startswith("L"):
+                _, e1, or1, e2, or2, v_len = ln.strip().split("\t")
+                if e1 + or1 not in edges:
+                    edges[e1 + or1] = []
+                if e2 + or2 not in edges_rev:
+                    edges_rev[e2 + or2] = []
+                edges[e1 + or1].append([e2 + or2, v_len[:-1]])
+                edges_rev[e2 + or2].append([e1 + or1, v_len[:-1]])
 
-graph = nx.MultiDiGraph()
-links = []
-used = {}
-vertex_cnt = 0
-vertex_len = [(i, {"label": "-1"}) for i in range(2*len(edges_len) + 1)]
-for e in edges_len:
-    in_vertex, in_len, out_vertex, out_len, vertex_cnt = get_vertex(e, edges, edges_rev, used, vertex_cnt)
-    vertex_len[in_vertex] = (in_vertex, {"label": in_len})
-    vertex_len[out_vertex] = (out_vertex, {"label": out_len})
-    color = "black" if e not in edges_color else edges_color[e]
-    links.append([in_vertex, in_len, out_vertex, out_len, e, str(edges_len[e]), color])
-    used[e] = {"in": in_vertex, "out": out_vertex}
+                or1 = "+" if or1 == "-" else "-"
+                or2 = "+" if or2 == "-" else "-"
+                if e2 + or2 not in edges:
+                    edges[e2 + or2] = []
+                if e1 + or1 not in edges_rev:
+                    edges_rev[e1 + or1] = []
+                edges[e2 + or2].append([e1 + or1, v_len[:-1]])
+                edges_rev[e1 + or1].append([e2 + or2, v_len[:-1]])
+
+    graph = nx.MultiDiGraph()
+    links = []
+    used = {}
+    vertex_cnt = 0
+    vertex_len = [(i, {"label": "-1"}) for i in range(2*len(edges_len) + 1)]
+    for e in edges_len:
+        in_vertex, in_len, out_vertex, out_len, vertex_cnt = get_vertex(e, edges, edges_rev, used, vertex_cnt)
+        vertex_len[in_vertex] = (in_vertex, {"label": in_len})
+        vertex_len[out_vertex] = (out_vertex, {"label": out_len})
+        color = "black" if e not in edges_color else edges_color[e]
+        links.append([in_vertex, in_len, out_vertex, out_len, e, str(edges_len[e]), color])
+        used[e] = {"in": in_vertex, "out": out_vertex}
 
 
-vertex_len = vertex_len[1:vertex_cnt + 1]
-graph.add_nodes_from(vertex_len)
+    vertex_len = vertex_len[1:vertex_cnt + 1]
+    graph.add_nodes_from(vertex_len)
 
-with open(outfilename.with_suffix(".tsv"), "w") as fout:
-    for l in links:
-        fout.write("\t".join([str(it) for it in l]) + "\n")
-        graph.add_edge(l[0], l[2], label = l[5], color = l[6])
+    with open(outfilename.with_suffix(".tsv"), "w") as fout:
+        for l in links:
+            fout.write("\t".join([str(it) for it in l]) + "\n")
+            graph.add_edge(l[0], l[2], label = l[5], color = l[6])
 
-pos = nx.nx_agraph.graphviz_layout(graph)
-nx.draw(graph, pos=pos)
-nx.drawing.nx_agraph.write_dot(graph, outfilename)
+    pos = nx.nx_agraph.graphviz_layout(graph)
+    nx.draw(graph, pos=pos)
+    nx.drawing.nx_agraph.write_dot(graph, outfilename)
+
+if __name__ == "__main__":
+    main()
