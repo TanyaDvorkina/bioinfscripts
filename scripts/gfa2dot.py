@@ -71,7 +71,7 @@ if len(sys.argv) > 3:
     with color_file.open() as f:
         for ln in f.readlines():
             e_id, color = ln.strip().split("\t")
-            if "-" or "+" not in e_id:
+            if ("-" not in e_id) and ("+" not in e_id):
                 e_id = e_id + "+"
             elif e_id.startswith("-"):
                 e_id = e_id[1:] + "-"
@@ -110,7 +110,7 @@ graph = nx.MultiDiGraph()
 links = []
 used = {}
 vertex_cnt = 0
-vertex_len = [(i, {"label": "-1"}) for i in range(2*len(edges_len))]
+vertex_len = [(i, {"label": "-1"}) for i in range(2*len(edges_len) + 1)]
 for e in edges_len:
     in_vertex, in_len, out_vertex, out_len, vertex_cnt = get_vertex(e, edges, edges_rev, used, vertex_cnt)
     vertex_len[in_vertex] = (in_vertex, {"label": in_len})
